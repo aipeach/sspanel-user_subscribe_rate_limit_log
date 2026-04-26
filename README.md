@@ -59,7 +59,7 @@ pnpm dev
 
 ## 生产环境部署（Linux + systemd + Nginx）
 
-以下示例以部署目录 `/opt/sspanel-user_subscribe_rate_limit_log`、应用端口 `3000` 为例。
+以下示例以部署目录 `/opt/sspanel-user_subscribe_rate_limit_log` 为例，应用端口以 `.env` 中 `PORT` 为准。
 
 1. 准备环境
 
@@ -71,7 +71,7 @@ pnpm dev
 
 ```bash
 cd /opt
-git clone <你的仓库地址> sspanel-user_subscribe_rate_limit_log
+git clone https://github.com/aipeach/sspanel-user_subscribe_rate_limit_log sspanel-user_subscribe_rate_limit_log
 cd sspanel-user_subscribe_rate_limit_log
 pnpm install --frozen-lockfile
 ```
@@ -90,11 +90,11 @@ cp .env.example .env
 - `MYSQL_DATABASE`
 - `ADMIN_PASSWORD_SHA256`
 
-建议额外增加：
+建议额外增加（例如）：
 
 ```env
 NODE_ENV=production
-PORT=3000
+PORT=3001
 ```
 
 4. 构建并本地验证
@@ -104,7 +104,8 @@ pnpm build
 pnpm start
 ```
 
-浏览器访问 `http://127.0.0.1:3000` 验证服务可用后再停止进程。
+浏览器访问 `http://127.0.0.1:<PORT>`（例如 `http://127.0.0.1:3001`）验证服务可用后再停止进程。
+说明：当前项目的 `pnpm start` 会读取项目根目录 `.env`，并使用其中的 `PORT` 启动。
 
 5. 使用 systemd 守护进程
 
@@ -118,8 +119,6 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/sspanel-user_subscribe_rate_limit_log
-Environment=NODE_ENV=production
-Environment=PORT=3000
 EnvironmentFile=/opt/sspanel-user_subscribe_rate_limit_log/.env
 ExecStart=/usr/bin/pnpm start
 Restart=always
@@ -149,7 +148,7 @@ server {
     server_name your-domain.com;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -167,6 +166,10 @@ server {
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+说明：
+- `proxy_pass` 端口请与 `.env` 中 `PORT` 保持一致。
+- 如果修改了 `.env` 中的 `PORT`，请执行 `sudo systemctl restart sspanel-log.service` 使其生效。
 
 7. SQLite 持久化与权限
 

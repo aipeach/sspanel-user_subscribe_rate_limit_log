@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/start-with-env.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
