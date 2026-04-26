@@ -60,15 +60,60 @@ function getArchiveDb(): DatabaseSync {
   return archiveDb;
 }
 
+function normalizeMysqlParams(params: Primitive[]): Primitive[] {
+  return params.map((value, index) => {
+    if (value === undefined) {
+      throw new Error(`SQL 参数非法：第 ${index + 1} 个参数为 undefined，请改为 null 或有效值`);
+    }
+
+    if (typeof value === "number" && !Number.isFinite(value)) {
+      throw new Error(`SQL 参数非法：第 ${index + 1} 个参数不是有限数字`);
+    }
+
+    return value;
+  });
+}
+
+function shouldFallbackToQuery(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.includes("Incorrect arguments to mysqld_stmt_execute");
+}
+
 export async function queryMysqlRows<T>(sql: string, params: Primitive[] = []): Promise<T[]> {
   const pool = getMysqlPool();
-  const [rows] = await pool.execute(sql, params);
-  return rows as T[];
+  const safeParams = normalizeMysqlParams(params);
+
+  try {
+    const [rows] = await pool.execute(sql, safeParams);
+    return rows as T[];
+  } catch (error) {
+    // 某些 MySQL/MariaDB 环境在 server-side prepared statements 下会抛出该错误，回退到 query 以保证可用性。
+    if (shouldFallbackToQuery(error)) {
+      const [rows] = await pool.query(sql, safeParams);
+      return rows as T[];
+    }
+    throw error;
+  }
 }
 
 export async function executeMysql(sql: string, params: Primitive[] = []): Promise<number> {
   const pool = getMysqlPool();
-  const [result] = await pool.execute(sql, params);
+  const safeParams = normalizeMysqlParams(params);
+  let result: unknown;
+
+  try {
+    [result] = await pool.execute(sql, safeParams);
+  } catch (error) {
+    if (shouldFallbackToQuery(error)) {
+      [result] = await pool.query(sql, safeParams);
+    } else {
+      throw error;
+    }
+  }
+
   if (typeof result === "object" && result !== null && "affectedRows" in result) {
     return Number((result as { affectedRows: number }).affectedRows || 0);
   }
